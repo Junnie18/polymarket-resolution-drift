@@ -60,6 +60,12 @@ def _do_get(url: str, params: Optional[Dict[str, Any]], timeout: int) -> Dict[st
     resp = _session.get(url, params=params, timeout=timeout)
     if resp.status_code == 429 or resp.status_code >= 500:
         raise FetchError(f"retryable status {resp.status_code} for {url} params={params}")
+    if resp.status_code == 422:
+        # Gamma returns 422 with a JSON body (e.g. "offset too large, use
+        # /markets/keyset for deeper pagination") for out-of-range paging
+        # params. Treat as a normal (non-retryable) response body rather
+        # than an exception, so callers can detect and stop paginating.
+        return resp.json()
     resp.raise_for_status()
     return resp.json()
 

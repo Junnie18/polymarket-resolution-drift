@@ -30,19 +30,32 @@ class ConvergenceMetrics:
     max_abs_move_last6h: Optional[float]  # largest single-step |delta price| in final 6h
 
 
-def _permanent_crossing_hours(df: pd.DataFrame, threshold: float, window_end) -> tuple:
-    """Find the earliest index i such that price[i:] is entirely >= threshold.
-    Returns (hours_before_resolution, reverted) where reverted indicates the
-    series touched >= threshold at some earlier point and dropped back below
-    it before the permanent crossing."""
-    prices = df["price"].to_numpy()
-    ts = df["timestamp"].to_numpy()
-    n = len(prices)
+def find_permanent_crossing(
+    df: pd.DataFrame,
+    threshold: float,
+    timestamp_col: str = "timestamp",
+    value_col: str = "price",
+) -> tuple:
+    """Find the earliest index i such that value[i:] is entirely >= threshold.
+
+    Generic over any (timestamp, value) series in [0, 1] -- used both for
+    Polymarket price series and ESPN win-probability series, so lag
+    between the two can be measured with the exact same definition of
+    "converged."
+
+    Returns (crossing_timestamp, reverted) where `reverted` indicates the
+    series touched >= threshold at some earlier point and dropped back
+    below it before the permanent crossing. crossing_timestamp is None if
+    the series never permanently stays >= threshold.
+    """
+    values = df[value_col].to_numpy()
+    ts = df[timestamp_col].to_numpy()
+    n = len(values)
     if n == 0:
         return None, False
 
-    above = prices >= threshold
-    # Find the last index where price is below threshold; permanent
+    above = values >= threshold
+    # Find the last index where value is below threshold; permanent
     # crossing is the index right after that (or 0 if never below).
     below_idx = np.where(~above)[0]
     if len(below_idx) == 0:
@@ -51,12 +64,21 @@ def _permanent_crossing_hours(df: pd.DataFrame, threshold: float, window_end) ->
     else:
         last_below = below_idx[-1]
         if last_below == n - 1:
-            # still below threshold at resolution -> never converged
+            # still below threshold at the end -> never converged
             return None, bool(above.any())
         perm_idx = last_below + 1
 
     reverted = bool(above[:perm_idx].any())
     crossing_ts = pd.Timestamp(ts[perm_idx])
+    return crossing_ts, reverted
+
+
+def _permanent_crossing_hours(df: pd.DataFrame, threshold: float, window_end) -> tuple:
+    """Wrapper around find_permanent_crossing() that returns hours-before-
+    resolution instead of a raw timestamp (used by compute_metrics)."""
+    crossing_ts, reverted = find_permanent_crossing(df, threshold)
+    if crossing_ts is None:
+        return None, reverted
     hours_before = (window_end - crossing_ts).total_seconds() / 3600.0
     return float(hours_before), reverted
 

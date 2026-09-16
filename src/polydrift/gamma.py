@@ -64,7 +64,9 @@ def fetch_markets(
             volume_num_max=volume_num_max,
             extra_params=extra_params,
         )
-        if not page:
+        if not page or not isinstance(page, list):
+            # Gamma returns a dict (e.g. {"error": "offset too large..."})
+            # once offset exceeds its deep-pagination limit; stop cleanly.
             break
         results.extend(page)
         offset += page_size

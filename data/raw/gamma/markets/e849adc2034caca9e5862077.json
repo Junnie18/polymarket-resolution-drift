@@ -1,0 +1,1 @@
+{"url": "https://gamma-api.polymarket.com/markets", "params": {"closed": "true", "limit": 100, "offset": 2100, "order": "volumeNum", "ascending": "false", "volume_num_min": 500, "volume_num_max": 20000}, "body": {"type": "validation error", "error": "offset too large, use /markets/keyset for deeper pagination"}}
